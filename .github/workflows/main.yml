@@ -1,0 +1,50 @@
+name: Image Content Poster
+
+on:
+  schedule:
+    # 1st, 3rd, 5th... alternate days at 5:00 UTC
+    - cron: '0 5 1/2 * *' 
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Permission to delete files
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Libraries
+        run: pip install requests Pillow
+
+      - name: Run Script
+        env:
+          PIXABAY_KEY: ${{ secrets.PIXABAY_KEY }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Tokens
+          TELEGRAM_TOKEN_NATURE: ${{ secrets.TELEGRAM_TOKEN_NATURE }}
+          TELEGRAM_TOKEN_WILDSNAP: ${{ secrets.TELEGRAM_TOKEN_WILDSNAP }}
+          TELEGRAM_TOKEN_MOTIVATION: ${{ secrets.TELEGRAM_TOKEN_MOTIVATION }}
+          # Webhooks
+          WEBHOOK_NATURE: ${{ secrets.WEBHOOK_NATURE }}
+          WEBHOOK_WILDSNAP: ${{ secrets.WEBHOOK_WILDSNAP }}
+          WEBHOOK_MOTIVATION: ${{ secrets.WEBHOOK_MOTIVATION }}
+        run: python main.py
+
+      - name: Commit Deletions & State
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # 'git add -A' used files ki deletion ko stage karega
+          git add -A
+          
+          git commit -m "Auto: Posted content and removed file" || echo "No changes"
+          git push
