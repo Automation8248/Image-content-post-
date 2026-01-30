@@ -1,16 +1,16 @@
-name: Image Content Poster
+name: Ultimate Post Automator
 
 on:
   schedule:
-    # 1st, 3rd, 5th... alternate days at 5:00 UTC
-    - cron: '0 5 1/2 * *' 
-  workflow_dispatch:
+    # 1st, 3rd, 5th... (Alternate Days)
+    - cron: '0 5 1/2 * *'
+  workflow_dispatch: # Button for Manual Run
 
 jobs:
-  run-bot:
+  run-poster:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Permission to delete files
+      contents: write # Delete/Save permission
 
     steps:
       - name: Checkout Code
@@ -21,30 +21,38 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install Libraries
+      - name: Install Dependencies
         run: pip install requests Pillow
 
-      - name: Run Script
+      - name: Run Auto-Poster
         env:
+          # System Event
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          
+          # Common Secrets
           PIXABAY_KEY: ${{ secrets.PIXABAY_KEY }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          # Tokens
+          
+          # Topic 1: Nature Secrets
           TELEGRAM_TOKEN_NATURE: ${{ secrets.TELEGRAM_TOKEN_NATURE }}
-          TELEGRAM_TOKEN_WILDSNAP: ${{ secrets.TELEGRAM_TOKEN_WILDSNAP }}
-          TELEGRAM_TOKEN_MOTIVATION: ${{ secrets.TELEGRAM_TOKEN_MOTIVATION }}
-          # Webhooks
           WEBHOOK_NATURE: ${{ secrets.WEBHOOK_NATURE }}
+          
+          # Topic 2: WildSnap Secrets
+          TELEGRAM_TOKEN_WILDSNAP: ${{ secrets.TELEGRAM_TOKEN_WILDSNAP }}
           WEBHOOK_WILDSNAP: ${{ secrets.WEBHOOK_WILDSNAP }}
+          
+          # Topic 3: Motivation Secrets
+          TELEGRAM_TOKEN_MOTIVATION: ${{ secrets.TELEGRAM_TOKEN_MOTIVATION }}
           WEBHOOK_MOTIVATION: ${{ secrets.WEBHOOK_MOTIVATION }}
         run: python main.py
 
-      - name: Commit Deletions & State
+      - name: Commit & Push Changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 'git add -A' used files ki deletion ko stage karega
+          # Stage deleted files and updated state
           git add -A
           
-          git commit -m "Auto: Posted content and removed file" || echo "No changes"
+          git commit -m "Auto: Content Posted & Cleaned" || echo "No changes to commit"
           git push
