@@ -1,17 +1,15 @@
-name: Ultimate Post Automator
+name: Motivation Post Automator
 
 on:
   schedule:
-    # 1st, 3rd, 5th... (Alternate Days)
     - cron: '0 5 1/2 * *'
-  workflow_dispatch: # Button for Manual Run
+  workflow_dispatch:
 
 jobs:
-  run-poster:
+  post:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Delete/Save permission
-
+      contents: write # history.txt save karne ke liye
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -21,38 +19,21 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install Dependencies
+      - name: Install Libraries
         run: pip install requests Pillow
 
-      - name: Run Auto-Poster
+      - name: Run Script
         env:
-          # System Event
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          
-          # Common Secrets
           PIXABAY_KEY: ${{ secrets.PIXABAY_KEY }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          
-          # Topic 1: Nature Secrets
-          TELEGRAM_TOKEN_NATURE: ${{ secrets.TELEGRAM_TOKEN_NATURE }}
-          WEBHOOK_NATURE: ${{ secrets.WEBHOOK_NATURE }}
-          
-          # Topic 2: WildSnap Secrets
-          TELEGRAM_TOKEN_WILDSNAP: ${{ secrets.TELEGRAM_TOKEN_WILDSNAP }}
-          WEBHOOK_WILDSNAP: ${{ secrets.WEBHOOK_WILDSNAP }}
-          
-          # Topic 3: Motivation Secrets
           TELEGRAM_TOKEN_MOTIVATION: ${{ secrets.TELEGRAM_TOKEN_MOTIVATION }}
           WEBHOOK_MOTIVATION: ${{ secrets.WEBHOOK_MOTIVATION }}
         run: python main.py
 
-      - name: Commit & Push Changes
+      - name: Save History to Repo
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
-          # Stage deleted files and updated state
-          git add -A
-          
-          git commit -m "Auto: Content Posted & Cleaned" || echo "No changes to commit"
+          git add history.txt || echo "No history file yet"
+          git commit -m "Auto: Update history.txt with new quote" || echo "No changes to commit"
           git push
