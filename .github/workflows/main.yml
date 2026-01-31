@@ -2,14 +2,19 @@ name: Motivation Post Automator
 
 on:
   schedule:
-    - cron: '0 5 1/2 * *'
-  workflow_dispatch:
+    # 0 5 */3 * * ka matlab:
+    # Mahine ki 1, 4, 7, 10, 13, 16... tarikh ko subah 5:00 baje chalega.
+    # (Do din ka gap rahega aur teesre din post hoga)
+    - cron: '0 5 */3 * *'
+  
+  workflow_dispatch: # Manual Button click karne ke liye
 
 jobs:
   post:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # history.txt save karne ke liye
+      contents: write # history.txt save karne ke liye permission
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -20,7 +25,7 @@ jobs:
           python-version: '3.9'
 
       - name: Install Libraries
-        run: pip install requests Pillow
+        run: pip install -r requirements.txt
 
       - name: Run Script
         env:
@@ -34,6 +39,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add history.txt || echo "No history file yet"
-          git commit -m "Auto: Update history.txt with new quote" || echo "No changes to commit"
+          git add history.txt || true
+          git commit -m "Auto: Update history.txt" || echo "No changes to commit"
           git push
