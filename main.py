@@ -4,7 +4,7 @@ import textwrap
 import json
 import time
 import io
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps # ImageOps added for smart resizing
 
 # --- CONFIGURATION ---
 PIXABAY_KEY = os.getenv('PIXABAY_KEY')
@@ -18,24 +18,20 @@ def get_safe_font():
     """Download Font safely. Fallback to default if fails."""
     font_path = "font.ttf"
     try:
-        # Check if already exists and valid size
         if os.path.exists(font_path) and os.path.getsize(font_path) > 1000:
             return ImageFont.truetype(font_path, 55), ImageFont.truetype(font_path, 35)
         
         print("📥 Downloading Font...")
         # Using a reliable raw link
         url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf"
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=15)
         
         if r.status_code == 200 and len(r.content) > 1000:
             with open(font_path, "wb") as f: f.write(r.content)
             return ImageFont.truetype(font_path, 55), ImageFont.truetype(font_path, 35)
-        else:
-            print("⚠️ Font download failed (Size/Status mismatch). Using Default.")
     except Exception as e:
         print(f"⚠️ Font Error: {e}. Using Default.")
 
-    # FALLBACK: Use Default Font if anything fails
     return ImageFont.load_default(), ImageFont.load_default()
 
 def create_motivation_image():
@@ -47,7 +43,7 @@ def create_motivation_image():
             with open(HISTORY_FILE, "r") as f: used_quotes = f.read().splitlines()
 
         headers = {'User-Agent': 'Mozilla/5.0'}
-        quote_text = "\"Do what you can, with what you have, where you are.\"" # Default
+        quote_text = "\"Do what you can, with what you have, where you are.\"" 
         raw_q = "Default"
 
         for _ in range(3):
@@ -59,106 +55,107 @@ def create_motivation_image():
                     break
             except: continue
 
-        # STEP 2: Get Background
+        # STEP 2: Get Background (Any Size)
         print("2️⃣ Fetching Background...")
         final_img = None
         
         try:
-            p_url = f"https://pixabay.com/api/?key={PIXABAY_KEY}&q=nature+dark+mountain&orientation=vertical&image_type=photo&per_page=10"
+            # Using 'nature' + 'dark' to get good contrast images
+            p_url = f"https://pixabay.com/api/?key={PIXABAY_KEY}&q=nature+dark+moody&image_type=photo&per_page=10"
             pix_data = requests.get(p_url, headers=headers, timeout=10).json()
             
             for hit in pix_data.get('hits', []):
                 try:
-                    img_res = requests.get(hit['webformatURL'], headers=headers, timeout=10)
-                    # Load from memory
+                    # Downloading High Quality Image
+                    img_res = requests.get(hit['largeImageURL'], headers=headers, timeout=15)
                     byte_data = io.BytesIO(img_res.content)
                     img = Image.open(byte_data)
-                    img.verify() # Check integrity
+                    img.verify() 
                     
-                    # Re-open for processing
                     byte_data.seek(0)
                     final_img = Image.open(byte_data).convert("RGB")
-                    print(f"✅ Background Loaded: {hit['webformatURL'][:30]}...")
+                    print(f"✅ Background Loaded: {hit['largeImageURL'][:30]}...")
                     break
                 except: continue
         except Exception as e:
             print(f"⚠️ Pixabay Failed: {e}")
 
-        # FALLBACK BACKGROUND (Solid Color)
+        # FALLBACK BACKGROUND
         if not final_img:
-            print("⚠️ Using Fallback Black Background.")
+            print("⚠️ Using Fallback Background.")
             final_img = Image.new('RGB', (1080, 1350), color=(20, 20, 20))
 
-        # STEP 3: Processing
-        print("3️⃣ Processing Image...")
-        # Resize safely
-        final_img = final_img.resize((1080, 1350), Image.Resampling.LANCZOS)
+        # STEP 3: Smart Resizing & Processing
+        print("3️⃣ Resizing & Processing...")
         
-        # Overlay
+        # 🔥 SMART RESIZE: Yeh image ko crop karke 1080x1350 mein fit karega bina stretch kiye
+        final_img = ImageOps.fit(final_img, (1080, 1350), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+        
+        # Dark Overlay
         overlay = Image.new('RGBA', final_img.size, (0, 0, 0, 140))
         final_img.paste(overlay, (0, 0), overlay)
         
         draw = ImageDraw.Draw(final_img)
-        
-        # Load Safe Fonts
         font_quote, font_author = get_safe_font()
         
-        # Text Wrapping Logic
-        # Adjust char width based on font type (Default font is smaller)
-        wrap_width = 22 if "FreeType" in str(type(font_quote)) else 40
-        
+        # Text Wrapping
+        wrap_width = 20 if "FreeType" in str(type(font_quote)) else 40
         lines = textwrap.wrap(quote_text, width=wrap_width)
-        # Calculate text block height
-        line_height = 75 if "FreeType" in str(type(font_quote)) else 20
+        
+        line_height = 80 if "FreeType" in str(type(font_quote)) else 20
         total_height = len(lines) * line_height
         y = (1350 - total_height) / 2
 
         for line in lines:
-            # textbbox/textsize check
-            try:
-                w = draw.textbbox((0, 0), line, font=font_quote)[2]
+            try: w = draw.textbbox((0, 0), line, font=font_quote)[2]
             except: w = draw.textlength(line, font=font_quote)
             
             draw.text(((1080 - w) / 2, y), line, font=font_quote, fill="white")
             y += line_height
         
-        # Author
-        y += 30
-        try:
-            w_auth = draw.textbbox((0, 0), FIXED_AUTHOR, font=font_author)[2]
+        y += 40
+        try: w_auth = draw.textbbox((0, 0), FIXED_AUTHOR, font=font_author)[2]
         except: w_auth = draw.textlength(FIXED_AUTHOR, font=font_author)
         
         draw.text(((1080 - w_auth) / 2, y), FIXED_AUTHOR, font=font_author, fill="white")
         
-        # Save
-        print("💾 Saving File...")
-        final_img.save("post.jpg", optimize=True, quality=85)
+        print("💾 Saving Optimized File...")
+        # Quality 75 for smaller size (faster upload)
+        final_img.save("post.jpg", optimize=True, quality=75)
         
-        # Update History
         with open(HISTORY_FILE, "a") as f: f.write(raw_q + "\n")
         
         return "post.jpg"
 
     except Exception as e:
-        print(f"❌ FATAL ERROR IN SCRIPT: {e}")
-        import traceback
-        traceback.print_exc() # Print details for debugging
+        print(f"❌ Processing Failed: {e}")
         return None
+
+def upload_with_retry(file_path):
+    """Retries upload 3 times if it fails"""
+    url = "https://catbox.moe/user/api.php"
+    
+    # Retry Loop (3 Attempts)
+    for attempt in range(1, 4):
+        try:
+            print(f"🚀 Uploading to Catbox (Attempt {attempt}/3)...")
+            with open(file_path, 'rb') as f:
+                # Increasing timeout with each attempt: 30s -> 60s -> 90s
+                r = requests.post(url, data={'reqtype': 'fileupload'}, files={'fileToUpload': f}, timeout=30 * attempt)
+                if "http" in r.text:
+                    return r.text
+        except Exception as e:
+            print(f"⚠️ Attempt {attempt} failed: {e}")
+            time.sleep(5) # Wait 5 seconds before retrying
+            
+    return None
 
 def main():
     path = create_motivation_image()
     if not path: return
 
-    # Catbox Upload
-    url = None
-    try:
-        print("🚀 Uploading to Catbox...")
-        with open(path, 'rb') as f:
-            r = requests.post("https://catbox.moe/user/api.php", 
-                            data={'reqtype': 'fileupload'}, 
-                            files={'fileToUpload': f}, timeout=30)
-            if "http" in r.text: url = r.text
-    except Exception as e: print(f"⚠️ Upload Error: {e}")
+    # Upload using Retry Logic
+    url = upload_with_retry(path)
 
     if url:
         print(f"✅ SUCCESS: {url}")
@@ -171,7 +168,7 @@ def main():
         if WEBHOOK_URL:
             requests.post(WEBHOOK_URL, json={"content": f"{caption}\n{url}"})
     else:
-        print("❌ Upload failed.")
+        print("❌ All upload attempts failed.")
 
 if __name__ == "__main__":
     main()
