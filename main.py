@@ -4,6 +4,7 @@ import textwrap
 import json
 import time
 from PIL import Image, ImageDraw, ImageFont
+import io
 
 # --- CONFIGURATION ---
 PIXABAY_KEY = os.getenv('PIXABAY_KEY')
@@ -38,28 +39,31 @@ def create_motivation_image():
                 break
         if not quote_data: return None
 
-        # 3. Get Background (Ensuring JPG format for no errors)
-        p_url = f"https://pixabay.com/api/?key={PIXABAY_KEY}&q=nature+dark&orientation=vertical&image_type=photo&per_page=10"
+        # 3. Get Valid Background (Fix for "Unknown File Format")
+        p_url = f"https://pixabay.com/api/?key={PIXABAY_KEY}&q=nature+dark&orientation=vertical&image_type=photo&per_page=15"
         pix_data = requests.get(p_url, timeout=5).json()
         
-        # Filter only JPG/JPEG links
-        bg_url = None
+        final_img = None
         for hit in pix_data['hits']:
-            if hit['webformatURL'].lower().endswith(('.jpg', '.jpeg')):
-                bg_url = hit['webformatURL']
-                break
+            try:
+                img_url = hit['webformatURL']
+                img_res = requests.get(img_url, timeout=10)
+                # Pillow se check karein ki image sahi hai ya nahi
+                test_img = Image.open(io.BytesIO(img_res.content))
+                test_img.verify() # Format check
+                final_img = Image.open(io.BytesIO(img_res.content)).convert("RGB")
+                break # Agar sahi image mil gayi toh loop se bahar
+            except:
+                continue # Agar error aaye toh agli image try karein
+
+        if not final_img: return None
         
-        if not bg_url: return None
+        # 4. Image Processing (1080x1350)
+        final_img = final_img.resize((1080, 1350), Image.Resampling.LANCZOS)
+        overlay = Image.new('RGBA', final_img.size, (0, 0, 0, 150))
+        final_img.paste(overlay, (0, 0), overlay)
         
-        # Download BG
-        with open("bg.jpg", "wb") as f: f.write(requests.get(bg_url, timeout=10).content)
-        
-        # 4. Image Processing (Fast)
-        img = Image.open("bg.jpg").convert("RGB").resize((1080, 1350))
-        overlay = Image.new('RGBA', img.size, (0, 0, 0, 150))
-        img.paste(overlay, (0, 0), overlay)
-        
-        draw, font_p = ImageDraw.Draw(img), get_font()
+        draw, font_p = ImageDraw.Draw(final_img), get_font()
         f_quote = ImageFont.truetype(font_p, 55) if font_p else ImageFont.load_default()
         
         lines = textwrap.wrap(f'"{quote_data["q"]}"', width=22)
@@ -69,25 +73,24 @@ def create_motivation_image():
             draw.text(((1080 - w) / 2, y), line, font=f_quote, fill="white")
             y += 75
         
-        # Author Name
         f_author = ImageFont.truetype(font_p, 35) if font_p else ImageFont.load_default()
         w_auth = draw.textbbox((0, 0), "- Lucas Hart", font=f_author)[2]
         draw.text(((1080 - w_auth) / 2, y + 30), "- Lucas Hart", font=f_author, fill="white")
         
-        img.save("post.jpg", optimize=True, quality=80)
+        final_img.save("post.jpg", optimize=True, quality=80)
 
-        # 5. Update History
         with open(HISTORY_FILE, "a") as f: f.write(quote_data['q'] + "\n")
         return "post.jpg"
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error logic: {e}")
         return None
 
 def main():
     path = create_motivation_image()
-    if not path: return
+    if not path:
+        print("❌ Could not create image (Format/Network Error)")
+        return
 
-    # Catbox Upload (with retry logic)
     url = None
     for _ in range(2):
         try:
