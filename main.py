@@ -148,10 +148,13 @@ def main():
     url = upload_with_retry(path)
     if url:
         print(f"✅ SUCCESS: {url}")
-caption = "💡 Daily Motivation. #motivation #motivationalquotes #success #mindset #inspiration #dailyinspiration #lifegoals #selfbelief #positivity #hardwork #discipline #nevergiveup #growthmindset #inspirationalvideo #motivationalvideo #reelsmotivation #shortsmotivation #viralreels #explorepage #trendingreels #LucasHart" 
+        # Yahan niche correction kiya gaya hai (Indentation sahi ki gayi hai)
+        caption = "💡 Daily Motivation. #motivation #motivationalquotes #success #mindset #inspiration #dailyinspiration #lifegoals #selfbelief #positivity #hardwork #discipline #nevergiveup #growthmindset #inspirationalvideo #motivationalvideo #reelsmotivation #shortsmotivation #viralreels #explorepage #trendingreels #LucasHart" 
+        
         if TELEGRAM_TOKEN and CHAT_ID:
             requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto", 
                          json={"chat_id": CHAT_ID, "photo": url, "caption": caption})
+        
         if WEBHOOK_URL:
             requests.post(WEBHOOK_URL, json={"content": f"{caption}\n{url}"})
     else:
